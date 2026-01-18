@@ -4,7 +4,7 @@ from uuid import UUID
 
 from pydantic import BaseModel, Field, ConfigDict, field_validator
 
-from todo_list.models import Todo, TodoStatus, TodoPriority
+from todo_list.models import TodoStatus, TodoPriority
 
 class Schema(BaseModel):
     model_config = ConfigDict(
