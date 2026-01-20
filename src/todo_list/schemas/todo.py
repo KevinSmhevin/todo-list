@@ -63,7 +63,7 @@ class SortBy(str, Enum):
     updated_at = "updated_at"
     due_date = "due_date"
     priority = "priority"
-    todo_title = "title"
+    todo_title = "todo_title"
 
 class SortOrder(str, Enum):
     """Enum for sort order"""
@@ -82,6 +82,8 @@ class TodoListFilter(Schema):
     due_before: datetime | None = None
     sort_by: SortBy = Field(default=SortBy.created_at)
     sort_order: SortOrder = Field(default=SortOrder.desc)
+    limit: int = Field(default=10, ge=1, le=100)
+    offset: int = Field(default=0, ge=0)
     
     @field_validator('created_after', 'created_before', 'due_after', 'due_before')
     @classmethod
