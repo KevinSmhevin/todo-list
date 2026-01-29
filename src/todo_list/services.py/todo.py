@@ -61,7 +61,6 @@ class TodoService:
         updates['updated_at'] = utcnow()
         
         updated_todo = self.repository.update(todo, updates)
-        self.repository.session.flush()  # Ensure changes are flushed
         return updated_todo
     
     def delete_todo(self, todo_id: UUID) -> bool:
@@ -108,7 +107,6 @@ class TodoService:
         }
         
         updated_todo = self.repository.update(todo, updates)
-        self.repository.session.flush()
         return updated_todo
     
     def update_priority(self, todo_id: UUID, new_priority: TodoPriority) -> Todo:
@@ -124,6 +122,5 @@ class TodoService:
         }
         
         updated_todo = self.repository.update(todo, updates)
-        self.repository.session.flush()
         return updated_todo
     
