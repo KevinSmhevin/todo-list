@@ -6,6 +6,8 @@ from werkzeug.exceptions import HTTPException
 
 from todo_list.config import settings
 from todo_list.extensions import db, migrate
+from todo_list.api.dependencies import init_dependencies
+
 
 """Flask application factory"""
 
@@ -42,6 +44,9 @@ def create_app():
     
     # CORS
     CORS(app, origins=settings.cors_origins)
+    
+    # Dependencies
+    init_dependencies(app)
     
     # ─────────────────────────────────────────────────────────────────
     # Register Blueprints
