@@ -3,10 +3,11 @@ from uuid import UUID
 from datetime import datetime
 from pydantic import ValidationError
 
-from todo_list.api.dependencies import transaction, get_db
+from todo_list.api.dependencies import transaction, get_db, get_repository
 from todo_list.services import TodoService, TodoNotFoundError, TodoValidationError
-from todo_list.schemas import TodoCreate, TodoUpdate, TodoResponse
+from todo_list.schemas import TodoCreate, TodoUpdate, TodoResponse, TodoListFilter, TodoListResponse
 from todo_list.models import TodoStatus, TodoPriority
+from todo_list.repositories.todo import TodoRepository
 
 todos_bp = Blueprint('todos', __name__, url_prefix='/api/v1/todos')
 
@@ -43,7 +44,10 @@ def list_todos():
     
     try:
         # Build filter dict from query parameters
+        
         filter_data = {}
+        
+        #filters
         
         if request.args.get('search'):
             filter_data['search'] = request.args.get('search')
@@ -59,24 +63,99 @@ def list_todos():
             if date_value:
                 filter_data[date_field] = datetime.fromisoformat(date_value)
             
+        #sorting
+        
+        if request.args.get('sort_by'):
+            filter_data['sort_by'] = request.args.get('sort_by')
+            
+        if request.args.get('sort_order'):
+            filter_data['sort_order'] = request.args.get('sort_order')
+            
+        #pagination
+        
+        if request.args.get('limit'):
+            limit_value = request.args.get('limit')
+            if limit_value:
+                filter_data['limit'] = int(limit_value)
+                
+        if request.args.get('offset'):
+            offset_value = request.args.get('offset')
+            if offset_value:
+                filter_data['offset'] = int(offset_value)
+                
+        #validate with pydantic scheme
+        
+        filters = TodoListFilter(**filter_data)
+            
     except ValueError as e:
         return jsonify({
             "error": "Invalid Filter",
             "message": f"Invalid parameter value: {str(e)}"
         }), 400
-
-
-# class TodoListFilter(Schema):
-#     """Schema for filtering todos"""
+        
+    # Query with filters
+        
+    repo = get_repository(TodoRepository)
+    todos, total = repo.list(filters)
     
-#     search: str | None = None
-#     priority: TodoPriority | None = None
-#     status: TodoStatus | None = None
-#     created_after: datetime | None = None
-#     created_before: datetime | None = None
-#     due_after: datetime | None = None
-#     due_before: datetime | None = None
-#     sort_by: SortBy = Field(default=SortBy.created_at)
-#     sort_order: SortOrder = Field(default=SortOrder.desc)
-#     limit: int = Field(default=10, ge=1, le=100)
-#     offset: int = Field(default=0, ge=0)
+    #Build response
+    
+    page = (filters.offset // filters.limit) + 1
+    
+    response = TodoListResponse(
+        todos=[TodoResponse.model_validate(t) for t in todos],
+        total=total,
+        page=page,
+        page_size=filters.limit
+    )
+    
+    return jsonify(response.model_dump(mode='json')), 200
+
+
+@todos_bp.route('', methods=['POST'])
+def create_todo():
+    """Create a new todo"""
+    
+    data = request.get_json()
+    todo_create = TodoCreate(**data)
+    
+    with transaction() as session:
+        service = TodoService(session)
+        todo = service.create_todo(todo_create)
+        
+    return jsonify(TodoListResponse.model_validate(todo).model_dump(mode='json')), 201
+
+@todos_bp.route('/<uuid:todo_id>', methods=['PATCH'])
+def update_todo(todo_id: UUID):
+    """Update a todo"""
+    
+    data = request.get_json()
+    
+    todo_update = TodoUpdate(**data)
+    
+    with transaction() as session:
+        service = TodoService(session)
+        
+        todo = service.update_todo(todo_id, todo_update)
+        
+        if todo is None:
+            return jsonify({"error": "Not Found", "message": "Todo not found"})
+    
+    return jsonify(TodoResponse.model_validate(todo).model_dump(mode='json')), 200
+
+
+@todos_bp.route('/<uuid:todo_id>', methods=['DELETE'])
+def delete_todo(todo_id: UUID):
+    """Delete a todo"""
+    
+    with transaction() as session:
+        service = TodoService(session)
+        
+        deleted = service.delete_todo(todo_id)
+        
+        if not deleted:
+            return jsonify({"error": "Not Found", "message": "Todo not found"}), 404
+        
+    return '', 204
+            
+        
